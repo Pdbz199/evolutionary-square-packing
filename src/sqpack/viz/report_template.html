@@ -1,0 +1,566 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Square packing evolution</title>
+<style>
+:root {
+  color-scheme: light;
+  --page: #f9f9f7;
+  --surface: #fcfcfb;
+  --ink: #0b0b0b;
+  --ink-2: #52514e;
+  --muted: #898781;
+  --grid: #e1e0d9;
+  --axis: #c3c2b7;
+  --ring: rgba(11,11,11,0.10);
+  --best: #2a78d6;
+  --median: #eb6834;
+  --worst: #1baf7a;
+  --accent: #2a78d6;
+  --critical: #d03b3b;
+  --good: #006300;
+  --tilt-0: #b7d3f6;
+  --tilt-1: #104281;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --page: #0d0d0d;
+    --surface: #1a1a19;
+    --ink: #f0efec;
+    --ink-2: #c3c2b7;
+    --muted: #898781;
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --ring: rgba(255,255,255,0.10);
+    --best: #3987e5;
+    --median: #d95926;
+    --worst: #199e70;
+    --accent: #3987e5;
+    --good: #0ca30c;
+    --tilt-0: #9ec5f4;
+    --tilt-1: #1c5cab;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --page: #0d0d0d;
+  --surface: #1a1a19;
+  --ink: #f0efec;
+  --ink-2: #c3c2b7;
+  --muted: #898781;
+  --grid: #2c2c2a;
+  --axis: #383835;
+  --ring: rgba(255,255,255,0.10);
+  --best: #3987e5;
+  --median: #d95926;
+  --worst: #199e70;
+  --accent: #3987e5;
+  --good: #0ca30c;
+  --tilt-0: #9ec5f4;
+  --tilt-1: #1c5cab;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--page); color: var(--ink);
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Ubuntu, sans-serif;
+}
+main { max-width: 1280px; margin: 0 auto; padding: 24px 16px 48px; }
+header { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+h1 { font-size: 22px; font-weight: 600; margin: 0 0 4px; }
+h2 { font-size: 15px; font-weight: 600; margin: 0 0 8px; }
+p.lede { margin: 0; color: var(--ink-2); max-width: 760px; }
+.theme { border: 1px solid var(--ring); background: var(--surface); color: var(--ink-2); border-radius: 8px; padding: 6px 10px; cursor: pointer; font: inherit; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin: 20px 0; }
+.tile { background: var(--surface); border: 1px solid var(--ring); border-radius: 12px; padding: 12px 14px; }
+.tile .label { color: var(--ink-2); font-size: 12px; }
+.tile .value { font-size: 22px; font-weight: 600; margin-top: 2px; }
+.tile .note { color: var(--muted); font-size: 12px; }
+.card { background: var(--surface); border: 1px solid var(--ring); border-radius: 12px; padding: 16px; }
+.controls { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+.controls button { border: 1px solid var(--ring); background: var(--page); color: var(--ink); border-radius: 8px; padding: 6px 12px; font: inherit; cursor: pointer; min-width: 40px; }
+.controls button:hover { border-color: var(--axis); }
+.controls input[type=range] { flex: 1 1 240px; accent-color: var(--accent); }
+.controls .gen { font-variant-numeric: tabular-nums; color: var(--ink-2); min-width: 140px; }
+.controls select { border: 1px solid var(--ring); background: var(--page); color: var(--ink); border-radius: 8px; padding: 5px 8px; font: inherit; }
+.layout { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: 16px; }
+@media (max-width: 860px) { .layout { grid-template-columns: 1fr; } }
+canvas { display: block; width: 100%; }
+.info { display: grid; grid-template-columns: auto 1fr; gap: 2px 12px; font-size: 13px; margin-top: 10px; }
+.info dt { color: var(--ink-2); }
+.info dd { margin: 0; font-variant-numeric: tabular-nums; }
+.legend { display: flex; gap: 16px; flex-wrap: wrap; font-size: 12px; color: var(--ink-2); margin: 4px 0 6px; }
+.legend span::before { content: ""; display: inline-block; width: 14px; height: 2px; vertical-align: middle; margin-right: 6px; background: var(--c); border-radius: 1px; }
+.tiltbar { height: 8px; border-radius: 4px; background: linear-gradient(90deg, var(--tilt-0), var(--tilt-1)); width: 160px; display: inline-block; vertical-align: middle; margin: 0 6px; }
+.hint { color: var(--muted); font-size: 12px; }
+.charts { display: grid; gap: 16px; margin-top: 16px; }
+.tooltip { position: fixed; pointer-events: none; background: var(--surface); border: 1px solid var(--ring); border-radius: 8px; padding: 6px 10px; font-size: 12px; box-shadow: 0 4px 16px rgba(0,0,0,0.12); display: none; z-index: 10; font-variant-numeric: tabular-nums; }
+.lineage { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 6px; }
+.lineage figure { margin: 0; flex: 0 0 auto; text-align: center; cursor: pointer; }
+.lineage figure canvas { width: 120px; height: 120px; border-radius: 6px; }
+.lineage figcaption { font-size: 11px; color: var(--ink-2); margin-top: 4px; max-width: 120px; }
+.gallery { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }
+.gallery img { width: 100%; border-radius: 8px; border: 1px solid var(--ring); background: #fff; }
+details summary { cursor: pointer; color: var(--ink-2); }
+table { border-collapse: collapse; width: 100%; font-size: 12px; font-variant-numeric: tabular-nums; }
+th, td { text-align: right; padding: 4px 8px; border-bottom: 1px solid var(--grid); }
+th:first-child, td:first-child { text-align: left; }
+section { margin-top: 20px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <div>
+      <h1 id="title">Square packing evolution</h1>
+      <p class="lede" id="lede"></p>
+    </div>
+    <button class="theme" id="theme" type="button" aria-label="Toggle light or dark theme">Theme</button>
+  </header>
+
+  <div class="tiles" id="tiles"></div>
+
+  <div class="card">
+    <div class="controls">
+      <button id="play" type="button" aria-label="Play or pause">▶</button>
+      <button id="prev" type="button" aria-label="Previous generation">‹</button>
+      <button id="next" type="button" aria-label="Next generation">›</button>
+      <input id="slider" type="range" min="0" max="0" value="0" aria-label="Generation">
+      <span class="gen" id="genlabel"></span>
+      <select id="speed" aria-label="Playback speed">
+        <option value="400">slow</option>
+        <option value="150" selected>normal</option>
+        <option value="50">fast</option>
+      </select>
+    </div>
+    <div class="layout">
+      <div>
+        <h2 id="seltitle">Best packing</h2>
+        <canvas id="big" height="420" aria-label="Selected packing"></canvas>
+        <dl class="info" id="info"></dl>
+        <p class="hint">Colour shows tilt: 0°<span class="tiltbar"></span>45°. Click a thumbnail to inspect it; ← → step generations, space plays.</p>
+      </div>
+      <div>
+        <h2>Whole population, best to worst</h2>
+        <canvas id="pop" height="420" aria-label="Population thumbnails"></canvas>
+        <p class="hint" id="pophint"></p>
+      </div>
+    </div>
+    <div class="charts">
+      <div>
+        <h2>Container side per generation (lower is better)</h2>
+        <div class="legend"><span style="--c: var(--best)">best</span><span style="--c: var(--median)">median</span><span style="--c: var(--worst)">worst</span><span style="--c: var(--muted)">reference lines</span></div>
+        <canvas id="fit" height="260" aria-label="Fitness chart"></canvas>
+      </div>
+      <div>
+        <h2>Population diversity</h2>
+        <p class="hint" style="margin:0 0 6px">Share of the container where two packings disagree, averaged over all pairs (after matching rotations and reflections).</p>
+        <canvas id="div" height="130" aria-label="Diversity chart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <section class="card" id="lineagecard">
+    <h2>Ancestry of the winner</h2>
+    <p class="hint" style="margin-top:0">Following each child back to the parent it was built from. Click one to jump to that generation.</p>
+    <div class="lineage" id="lineage"></div>
+  </section>
+
+  <section class="card" id="gallerycard">
+    <h2>Static figures</h2>
+    <div class="gallery" id="gallery"></div>
+  </section>
+
+  <section class="card">
+    <details>
+      <summary>Data table (sampled generations)</summary>
+      <div style="overflow-x:auto"><table id="table"></table></div>
+    </details>
+  </section>
+</main>
+<div class="tooltip" id="tip"></div>
+
+<script type="application/json" id="data">__DATA__</script>
+<script>
+(function () {
+  "use strict";
+  const D = JSON.parse(document.getElementById("data").textContent);
+  const $ = (id) => document.getElementById(id);
+  const css = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+  // ---------------------------------------------------------------- decoding
+  function decodeInt16(b64) {
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new Int16Array(bytes.buffer);
+  }
+  const N = D.n, P = D.pop;
+  const frames = D.frames.map((f) => {
+    const raw = decodeInt16(f.cfg);
+    const cfg = new Float32Array(raw.length);
+    for (let i = 0; i < raw.length; i += 3) {
+      cfg[i] = raw[i] / D.scale_xy; cfg[i + 1] = raw[i + 1] / D.scale_xy; cfg[i + 2] = raw[i + 2] / D.scale_t;
+    }
+    return Object.assign({}, f, { cfg });
+  });
+  const G = D.stats.best.length - 1;
+
+  // ---------------------------------------------------------------- colours
+  const TILT = ["#b7d3f6", "#9ec5f4", "#86b6ef", "#6da7ec", "#5598e7", "#3987e5", "#2a78d6", "#256abf", "#1c5cab", "#184f95", "#104281"];
+  function hexToRgb(h) { const v = parseInt(h.slice(1), 16); return [(v >> 16) & 255, (v >> 8) & 255, v & 255]; }
+  const TILT_RGB = TILT.map(hexToRgb);
+  function tiltColor(t) {
+    const q = Math.PI / 2;
+    t = t - q * Math.floor((t + q / 2) / q);
+    let f = Math.min(1, Math.abs(t) / (Math.PI / 4)) * (TILT.length - 1);
+    const i = Math.min(TILT.length - 2, Math.floor(f)); f -= i;
+    const a = TILT_RGB[i], b = TILT_RGB[i + 1];
+    return `rgb(${Math.round(a[0] + (b[0] - a[0]) * f)},${Math.round(a[1] + (b[1] - a[1]) * f)},${Math.round(a[2] + (b[2] - a[2]) * f)})`;
+  }
+
+  // ---------------------------------------------------------------- geometry
+  function extent(t) { return 0.5 * (Math.abs(Math.cos(t)) + Math.abs(Math.sin(t))); }
+  function bbox(cfg, off) {
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    for (let i = 0; i < N; i++) {
+      const k = off + 3 * i, r = extent(cfg[k + 2]);
+      x0 = Math.min(x0, cfg[k] - r); x1 = Math.max(x1, cfg[k] + r);
+      y0 = Math.min(y0, cfg[k + 1] - r); y1 = Math.max(y1, cfg[k + 1] + r);
+    }
+    const s = Math.max(x1 - x0, y1 - y0);
+    return { cx: (x0 + x1) / 2, cy: (y0 + y1) / 2, s };
+  }
+
+  function setupCanvas(cv, cssHeight) {
+    const dpr = window.devicePixelRatio || 1;
+    const w = cv.clientWidth;
+    const h = cssHeight === undefined ? w : cssHeight;
+    cv.style.height = h + "px";
+    cv.width = Math.round(w * dpr); cv.height = Math.round(h * dpr);
+    const ctx = cv.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return { ctx, w, h };
+  }
+
+  // draw packing (cfg slice at offset) centred at (px,py) with `scale` px per unit
+  function drawPacking(ctx, cfg, off, px, py, scale, lw, frame) {
+    const b = bbox(cfg, off);
+    ctx.lineWidth = lw;
+    ctx.strokeStyle = css("--surface");
+    for (let i = 0; i < N; i++) {
+      const k = off + 3 * i;
+      const x = cfg[k] - b.cx, y = cfg[k + 1] - b.cy, t = cfg[k + 2];
+      const c = Math.cos(t) * 0.5, s = Math.sin(t) * 0.5;
+      ctx.beginPath();
+      const pts = [[-c + s, -s - c], [c + s, s - c], [c - s, s + c], [-c - s, -s + c]];
+      pts.forEach((p, j) => {
+        const X = px + (x + p[0]) * scale, Y = py - (y + p[1]) * scale;
+        if (j === 0) ctx.moveTo(X, Y); else ctx.lineTo(X, Y);
+      });
+      ctx.closePath();
+      ctx.fillStyle = tiltColor(t);
+      ctx.fill();
+      if (lw > 0) ctx.stroke();
+    }
+    if (frame) {
+      ctx.strokeStyle = css("--ink-2");
+      ctx.lineWidth = 1;
+      ctx.strokeRect(px - b.s / 2 * scale, py - b.s / 2 * scale, b.s * scale, b.s * scale);
+    }
+    return b;
+  }
+
+  // ---------------------------------------------------------------- header
+  const F = D.final;
+  const fmt = (v, d = 4) => (v === null || v === undefined || !isFinite(v)) ? "–" : Number(v).toFixed(d);
+  $("title").textContent = `${N} unit squares in the smallest square`;
+  $("lede").textContent = `A memetic genetic algorithm evolved ${P} packings for ${F.generations_run} generations. ` +
+    `Each individual is a valid packing; its fitness is the side of the square that contains it. ` +
+    `Best known for N = ${N}: ${F.best_known === null ? "not tabulated" : fmt(F.best_known, 6) + " (" + F.best_known_note + ")"}.`;
+  const tiles = [
+    ["Final side", fmt(F.side, 6), F.valid ? "valid, no overlaps" : "INVALID"],
+    ["Gap to best known", F.gap_percent === null ? "–" : (F.gap_percent >= 0 ? "+" : "") + F.gap_percent.toFixed(3) + "%", F.best_known === null ? "" : "best known " + fmt(F.best_known, 4)],
+    ["Area bound √N", fmt(F.lower_bound, 4), "plain grid " + F.trivial_side],
+    ["Generations", F.generations_run.toLocaleString(), "stopped: " + F.stop_reason],
+    ["Packings evaluated", F.evaluations.toLocaleString(), fmt(F.seconds, 1) + " s total"],
+  ];
+  $("tiles").innerHTML = tiles.map(([l, v, n]) => `<div class="tile"><div class="label">${l}</div><div class="value">${v}</div><div class="note">${n}</div></div>`).join("");
+
+  // ---------------------------------------------------------------- state
+  let fi = 0, sel = 0, playing = false, timer = null, hoverThumb = -1;
+  const slider = $("slider");
+  slider.max = frames.length - 1;
+  const MUT = D.mutations.map((m) => (m === "none" ? "" : m));
+  function opName(code) {
+    if (code < 0) return "random start";
+    const xo = code & 1, m = MUT[code >> 1];
+    return xo ? (m ? "crossover + " + m : "crossover") : m;
+  }
+
+  // ---------------------------------------------------------------- big view
+  function drawBig() {
+    const f = frames[fi];
+    const { ctx, w, h } = setupCanvas($("big"));
+    ctx.clearRect(0, 0, w, h);
+    const off = sel * N * 3;
+    // common scale across the whole run for the selected rank: use the largest best side
+    const b = bbox(f.cfg, off);
+    const scale = (w * 0.94) / Math.max(b.s, D.best_max_side);
+    drawPacking(ctx, f.cfg, off, w / 2, h / 2, scale, 1.5, true);
+    $("seltitle").textContent = sel === 0 ? "Best packing this generation" : `Rank ${sel + 1} of ${P}`;
+    const rows = [
+      ["generation", f.gen],
+      ["container side", fmt(f.fit[sel], 5)],
+      ["rank", `${sel + 1} of ${P}`],
+      ["born", `generation ${f.born[sel]}`],
+      ["made by", opName(f.op[sel])],
+      ["squeeze step", fmt(f.eps[sel], 4)],
+      ...(D.islands > 1 ? [["island", `${f.island[sel] + 1} of ${D.islands}`]] : []),
+      ["id", f.ids[sel]],
+    ];
+    $("info").innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("");
+  }
+
+  // ---------------------------------------------------------------- population grid
+  let popLayout = null;
+  function drawPop() {
+    const f = frames[fi];
+    const cv = $("pop");
+    const w = cv.clientWidth;
+    let cols = 1, best = 0;
+    const hMax = Math.max(320, Math.min(620, w));
+    for (let c = 1; c <= P; c++) {
+      const cell = Math.min(w / c, hMax / Math.ceil(P / c));
+      if (cell > best) { best = cell; cols = c; }
+    }
+    const cell = Math.floor(best), rows = Math.ceil(P / cols);
+    const { ctx } = setupCanvas(cv, rows * cell);
+    ctx.clearRect(0, 0, w, rows * cell);
+    let maxS = 0;
+    for (let p = 0; p < P; p++) maxS = Math.max(maxS, bbox(f.cfg, p * N * 3).s);
+    const scale = (cell * 0.86) / maxS;
+    for (let p = 0; p < P; p++) {
+      const r = Math.floor(p / cols), c = p % cols;
+      const cx = c * cell + cell / 2, cy = r * cell + cell / 2;
+      if (p === sel || p === hoverThumb) {
+        ctx.fillStyle = p === sel ? css("--grid") : css("--ring");
+        ctx.fillRect(c * cell + 1, r * cell + 1, cell - 2, cell - 2);
+      }
+      drawPacking(ctx, f.cfg, p * N * 3, cx, cy, scale, cell > 70 ? 0.6 : 0.3, true);
+    }
+    popLayout = { cols, cell, rows };
+    $("pophint").textContent = `Drawn at a common scale for this generation. Median side ${fmt(D.stats.median[f.gen], 4)}, worst ${fmt(D.stats.worst[f.gen], 4)}.`;
+  }
+
+  $("pop").addEventListener("click", (e) => {
+    if (!popLayout) return;
+    const r = $("pop").getBoundingClientRect();
+    const c = Math.floor((e.clientX - r.left) / popLayout.cell), rr = Math.floor((e.clientY - r.top) / popLayout.cell);
+    const p = rr * popLayout.cols + c;
+    if (c < popLayout.cols && p >= 0 && p < P) { sel = p; drawBig(); drawPop(); }
+  });
+  $("pop").addEventListener("mousemove", (e) => {
+    if (!popLayout) return;
+    const r = $("pop").getBoundingClientRect();
+    const c = Math.floor((e.clientX - r.left) / popLayout.cell), rr = Math.floor((e.clientY - r.top) / popLayout.cell);
+    const p = rr * popLayout.cols + c;
+    const f = frames[fi];
+    const nh = (c < popLayout.cols && p >= 0 && p < P) ? p : -1;
+    if (nh !== hoverThumb) { hoverThumb = nh; drawPop(); }
+    if (nh >= 0) showTip(e, `rank ${nh + 1} · side ${fmt(f.fit[nh], 5)}<br>${opName(f.op[nh])}, born gen ${f.born[nh]}`);
+    else hideTip();
+  });
+  $("pop").addEventListener("mouseleave", () => { hoverThumb = -1; hideTip(); drawPop(); });
+
+  // ---------------------------------------------------------------- charts
+  const useLog = G > 40;
+  function xt(g) { return useLog ? (g <= 10 ? 0.6 * g / 10 : 0.6 + Math.log10(g / 10)) : g; }
+  const XMAX = xt(Math.max(1, G));
+  const xticks = useLog ? [0, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000, 5000, 10000].filter((t) => t <= G) : niceTicks(0, G, 6);
+  function niceTicks(a, b, n) {
+    const span = b - a || 1, step0 = span / n, mag = Math.pow(10, Math.floor(Math.log10(step0)));
+    const step = [1, 2, 2.5, 5, 10].map((m) => m * mag).find((s) => span / s <= n) || mag * 10;
+    const out = []; for (let v = Math.ceil(a / step) * step; v <= b + 1e-9; v += step) out.push(+v.toFixed(10));
+    return out;
+  }
+
+  function lineChart(cv, height, series, refs, ylo, yhi, yfmt) {
+    const { ctx, w, h } = setupCanvas(cv, height);
+    const m = { l: 52, r: 16, t: 10, b: 24 };
+    const X = (g) => m.l + (xt(g) / XMAX) * (w - m.l - m.r);
+    const Y = (v) => m.t + (1 - (v - ylo) / (yhi - ylo)) * (h - m.t - m.b);
+    ctx.clearRect(0, 0, w, h);
+    ctx.font = "11px system-ui, sans-serif";
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = css("--grid"); ctx.fillStyle = css("--ink-2");
+    ctx.textAlign = "right"; ctx.textBaseline = "middle";
+    niceTicks(ylo, yhi, 4).forEach((v) => {
+      ctx.beginPath(); ctx.moveTo(m.l, Y(v)); ctx.lineTo(w - m.r, Y(v)); ctx.stroke();
+      ctx.fillText(yfmt(v), m.l - 6, Y(v));
+    });
+    ctx.textAlign = "center"; ctx.textBaseline = "top";
+    xticks.forEach((g) => {
+      ctx.beginPath(); ctx.moveTo(X(g), m.t); ctx.lineTo(X(g), h - m.b); ctx.stroke();
+      ctx.fillText(String(g), X(g), h - m.b + 6);
+    });
+    refs.forEach(([v, label]) => {
+      if (v < ylo || v > yhi) return;
+      ctx.strokeStyle = css("--muted"); ctx.beginPath(); ctx.moveTo(m.l, Y(v)); ctx.lineTo(w - m.r, Y(v)); ctx.stroke();
+      ctx.fillStyle = css("--ink-2"); ctx.textAlign = "left"; ctx.textBaseline = "bottom"; ctx.fillText(label, m.l + 4, Y(v) - 2);
+    });
+    ctx.lineJoin = "round"; ctx.lineCap = "round";
+    series.forEach(([data, color, lw]) => {
+      ctx.save();
+      ctx.beginPath(); ctx.rect(m.l, m.t - 2, w - m.l - m.r, h - m.t - m.b + 4); ctx.clip();
+      ctx.strokeStyle = css(color); ctx.lineWidth = lw; ctx.beginPath();
+      data.forEach((v, g) => { const y = Y(v); if (g === 0) ctx.moveTo(X(g), y); else ctx.lineTo(X(g), y); });
+      ctx.stroke();
+      ctx.restore();
+    });
+    // cursor
+    const g = frames[fi].gen;
+    ctx.strokeStyle = css("--ink-2"); ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(X(g), m.t); ctx.lineTo(X(g), h - m.b); ctx.stroke();
+    const first = series[series.length - 1];
+    ctx.fillStyle = css(first[1]); ctx.strokeStyle = css("--surface"); ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(X(g), Y(first[0][g]), 4.5, 0, 2 * Math.PI); ctx.fill(); ctx.stroke();
+    return { X, Y, m, w, h };
+  }
+
+  const S = D.stats;
+  const recLo = Math.min(...S.best, F.best_known === null ? Infinity : F.best_known);
+  const yHi = Math.max(S.median[0], S.best[0]);
+  const refs = [];
+  if (F.best_known !== null) refs.push([F.best_known, "best known " + fmt(F.best_known, 4)]);
+  if (F.trivial_side < yHi * 1.01 && (F.best_known === null || Math.abs(F.trivial_side - F.best_known) > 1e-9)) refs.push([F.trivial_side, "plain grid " + F.trivial_side]);
+  if (F.lower_bound >= recLo - 0.35 * (yHi - recLo)) refs.push([F.lower_bound, "area bound √N"]);
+  const yLo = Math.min(recLo, ...refs.map((r) => r[0]));
+  const pad = (yHi - yLo) * 0.06 || 0.01;
+  let fitGeom = null, divGeom = null;
+  function drawCharts() {
+    fitGeom = lineChart($("fit"), 260, [[S.worst, "--worst", 1.6], [S.median, "--median", 1.8], [S.best, "--best", 2]], refs, yLo - pad, yHi + pad * 0.6, (v) => v.toFixed(2));
+    const dmax = Math.max(0.05, ...S.diversity) * 1.12;
+    divGeom = lineChart($("div"), 130, [[S.diversity, "--best", 2]], [], 0, dmax, (v) => v.toFixed(2));
+  }
+
+  function genFromX(geom, clientX, cv) {
+    const r = cv.getBoundingClientRect();
+    const frac = (clientX - r.left - geom.m.l) / (geom.w - geom.m.l - geom.m.r);
+    const xv = Math.max(0, Math.min(1, frac)) * XMAX;
+    let g;
+    if (!useLog) g = Math.round(xv);
+    else g = xv <= 0.6 ? Math.round(xv / 0.6 * 10) : Math.round(10 * Math.pow(10, xv - 0.6));
+    return Math.max(0, Math.min(G, g));
+  }
+  function nearestFrame(g) {
+    let best = 0;
+    frames.forEach((f, i) => { if (Math.abs(f.gen - g) < Math.abs(frames[best].gen - g)) best = i; });
+    return best;
+  }
+  [["fit", () => fitGeom], ["div", () => divGeom]].forEach(([id, geom]) => {
+    const cv = $(id);
+    cv.addEventListener("mousemove", (e) => {
+      const g = genFromX(geom(), e.clientX, cv);
+      showTip(e, `generation ${g}<br>best ${fmt(S.best[g], 5)}<br>median ${fmt(S.median[g], 5)}<br>worst ${fmt(S.worst[g], 5)}<br>diversity ${fmt(S.diversity[g], 3)}`);
+    });
+    cv.addEventListener("mouseleave", hideTip);
+    cv.addEventListener("click", (e) => { setFrame(nearestFrame(genFromX(geom(), e.clientX, cv))); });
+  });
+
+  // ---------------------------------------------------------------- tooltip
+  const tip = $("tip");
+  function showTip(e, html) { tip.innerHTML = html; tip.style.display = "block"; tip.style.left = (e.clientX + 14) + "px"; tip.style.top = (e.clientY + 14) + "px"; }
+  function hideTip() { tip.style.display = "none"; }
+
+  // ---------------------------------------------------------------- lineage
+  function drawLineage() {
+    const box = $("lineage");
+    if (!D.lineage || D.lineage.length < 2) { $("lineagecard").style.display = "none"; return; }
+    box.innerHTML = "";
+    let maxS = 0;
+    const cfgs = D.lineage.map((a) => Float32Array.from(a.cfg));
+    cfgs.forEach((c) => { maxS = Math.max(maxS, bbox(c, 0).s); });
+    D.lineage.forEach((a, i) => {
+      const fig = document.createElement("figure");
+      const cv = document.createElement("canvas");
+      fig.appendChild(cv);
+      const cap = document.createElement("figcaption");
+      cap.textContent = `gen ${a.gen} · ${opName(a.op)} · ${fmt(a.side, 4)}`;
+      fig.appendChild(cap);
+      fig.addEventListener("click", () => {
+        const k = nearestFrame(a.gen);
+        const idx = frames[k].ids.indexOf(a.id);
+        sel = idx >= 0 ? idx : 0;
+        setFrame(k);
+      });
+      box.appendChild(fig);
+      requestAnimationFrame(() => {
+        const { ctx, w } = setupCanvas(cv, 120);
+        drawPacking(ctx, cfgs[i], 0, w / 2, 60, (w * 0.9) / maxS, 0.8, true);
+      });
+    });
+  }
+
+  // ---------------------------------------------------------------- gallery + table
+  function buildGallery() {
+    if (!D.figures || !D.figures.length) { $("gallerycard").style.display = "none"; return; }
+    $("gallery").innerHTML = D.figures.map((f) => `<a href="${f}" target="_blank" rel="noopener"><img loading="lazy" src="${f}" alt="${f}"></a>`).join("");
+  }
+  function buildTable() {
+    const gens = [...new Set(frames.map((f) => f.gen))];
+    const step = Math.max(1, Math.ceil(gens.length / 25));
+    const rows = gens.filter((_, i) => i % step === 0 || i === gens.length - 1);
+    $("table").innerHTML = "<tr><th>generation</th><th>best</th><th>median</th><th>worst</th><th>diversity</th></tr>" +
+      rows.map((g) => `<tr><td>${g}</td><td>${fmt(S.best[g], 5)}</td><td>${fmt(S.median[g], 5)}</td><td>${fmt(S.worst[g], 5)}</td><td>${fmt(S.diversity[g], 3)}</td></tr>`).join("");
+  }
+
+  // ---------------------------------------------------------------- playback
+  function setFrame(k) {
+    fi = Math.max(0, Math.min(frames.length - 1, k));
+    slider.value = fi;
+    $("genlabel").textContent = `generation ${frames[fi].gen} of ${G}`;
+    drawBig(); drawPop(); drawCharts();
+  }
+  function play(on) {
+    playing = on;
+    $("play").textContent = on ? "❚❚" : "▶";
+    clearInterval(timer);
+    if (on) {
+      if (fi === frames.length - 1) setFrame(0);
+      timer = setInterval(() => { if (fi >= frames.length - 1) play(false); else setFrame(fi + 1); }, +$("speed").value);
+    }
+  }
+  slider.addEventListener("input", () => setFrame(+slider.value));
+  $("play").addEventListener("click", () => play(!playing));
+  $("prev").addEventListener("click", () => { play(false); setFrame(fi - 1); });
+  $("next").addEventListener("click", () => { play(false); setFrame(fi + 1); });
+  $("speed").addEventListener("change", () => { if (playing) play(true); });
+  document.addEventListener("keydown", (e) => {
+    if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
+    if (e.key === "ArrowRight") { play(false); setFrame(fi + 1); }
+    else if (e.key === "ArrowLeft") { play(false); setFrame(fi - 1); }
+    else if (e.key === " ") { e.preventDefault(); play(!playing); }
+  });
+  $("theme").addEventListener("click", () => {
+    const root = document.documentElement;
+    const dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+    root.dataset.theme = dark ? "light" : "dark";
+    try { localStorage.setItem("sqpack-theme", root.dataset.theme); } catch (err) { /* storage unavailable */ }
+    setFrame(fi); drawLineage();
+  });
+  try { const t = localStorage.getItem("sqpack-theme"); if (t) document.documentElement.dataset.theme = t; } catch (err) { /* storage unavailable */ }
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { setFrame(fi); drawLineage(); });
+  let resizeTimer = null;
+  window.addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(() => { setFrame(fi); drawLineage(); }, 120); });
+
+  buildGallery();
+  buildTable();
+  drawLineage();
+  setFrame(0);
+})();
+</script>
+</body>
+</html>

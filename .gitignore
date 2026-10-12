@@ -1,0 +1,33 @@
+# Run output (histories, figures, reports, benchmark results): regenerate with `sqpack`
+runs/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Python bytecode and Numba's on-disk JIT cache (*.nbi / *.nbc live in __pycache__)
+__pycache__/
+*.py[cod]
+*.nbi
+*.nbc
+
+# Packaging / build artefacts
+*.egg-info/
+build/
+dist/
+
+# Test, coverage and lint caches
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.ruff_cache/
+.mypy_cache/
+
+# Editors and OS files
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
